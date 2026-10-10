@@ -1,0 +1,57 @@
+name: Build Sync Player
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx electron-builder --win nsis portable --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: dist/*.exe }
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx electron-builder --mac dmg zip --universal --publish never
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+      - uses: actions/upload-artifact@v4
+        with: { name: macos, path: "dist/*.dmg\ndist/*.zip" }
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: npm ci
+      - run: npx cap sync android
+      - run: ./gradlew assembleDebug
+        working-directory: android
+      - run: mv android/app/build/outputs/apk/debug/app-debug.apk SyncPlayer-android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: SyncPlayer-android.apk }
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos, android]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with: { files: out/* }

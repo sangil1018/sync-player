@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Sync Player</title>
+<style>
+:root{
+  --bg:#0d0e11; --surface:#15171c; --surface-2:#1c1f26; --line:rgba(255,255,255,.07);
+  --text:#eceef3; --muted:#868c99; --faint:#4b505c; --accent:#ffb454; --accent-soft:rgba(255,180,84,.14);
+  --ko:#c9cedb; --warn:#f2c94c;
+  --fs:1;
+  --font:"Inter","Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR","Segoe UI",system-ui,-apple-system,sans-serif;
+  --dock-h:132px;
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.app{height:100%;display:flex;flex-direction:column}
+
+/* header */
+header{display:flex;align-items:center;gap:12px;padding:calc(14px + var(--safe-t)) 20px 12px;border-bottom:1px solid var(--line);flex:none}
+.brand{display:flex;flex-direction:column;min-width:0;flex:1}
+.brand b{font-size:15px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:2px}
+.seg button{padding:6px 11px;font-size:12.5px;color:var(--muted);border-radius:8px;transition:background .18s,color .18s}
+.seg button[aria-pressed=true]{background:var(--surface-2);color:var(--text)}
+.iconbtn{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;color:var(--muted);transition:background .18s,color .18s}
+.iconbtn:hover{background:var(--surface);color:var(--text)}
+.iconbtn svg{width:18px;height:18px}
+
+/* transcript */
+main{flex:1;position:relative;min-height:0}
+#scroller{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;scroll-behavior:auto;
+  padding:34vh 20px calc(var(--dock-h) + var(--safe-b) + 34vh);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 12%,#000 82%,transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 12%,#000 82%,transparent 100%)}
+#scroller::-webkit-scrollbar{width:0}
+.list{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.cue{display:block;text-align:left;width:100%;padding:14px 18px;border-radius:16px;opacity:.36;
+  transition:opacity .22s ease-out,background .22s ease-out;position:relative}
+.cue:hover{opacity:.7}
+.cue.active{opacity:1;background:var(--accent-soft)}
+.cue .t{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;letter-spacing:.02em;margin-bottom:5px;display:flex;gap:8px;align-items:center}
+.cue.active .t{color:var(--accent)}
+.cue .en{font-size:calc(21px*var(--fs));line-height:1.42;font-weight:550;letter-spacing:-.012em;color:var(--text)}
+.cue .ko{font-size:calc(17px*var(--fs));line-height:1.5;color:var(--ko);margin-top:6px;word-break:keep-all}
+.cue.active .ko{color:#e3e6ef}
+.mode-en .ko,.mode-ko .en{display:none}
+.mode-ko .ko{margin-top:0;font-size:calc(21px*var(--fs));color:var(--text);font-weight:550}
+.warn{color:var(--warn);font-size:11px}
+
+/* empty state */
+#empty{position:absolute;inset:0;display:grid;place-items:center;padding:24px;z-index:2}
+.card{width:min(440px,100%);text-align:center}
+.card h1{font-size:26px;font-weight:650;letter-spacing:-.02em;margin:0 0 8px}
+.card p{margin:0 0 26px;color:var(--muted);font-size:14px;line-height:1.6}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pick button{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 12px;display:flex;flex-direction:column;align-items:center;gap:10px;
+  transition:background .18s,border-color .18s,transform .12s}
+.pick button:hover{background:var(--surface-2);border-color:rgba(255,255,255,.14)}
+.pick button:active{transform:scale(.98)}
+.pick button.done{border-color:rgba(255,180,84,.55)}
+.pick svg{width:24px;height:24px;color:var(--accent)}
+.pick b{font-size:14px;font-weight:600}
+.pick small{font-size:11.5px;color:var(--muted);word-break:keep-all;line-height:1.4}
+.hint{margin-top:18px;font-size:12px;color:var(--faint)}
+body.drag #empty .card,body.drag #scroller{outline:2px dashed var(--accent);outline-offset:-10px;border-radius:20px}
+
+/* dock */
+.dock{position:absolute;left:0;right:0;bottom:0;padding:12px 20px calc(14px + var(--safe-b));
+  background:linear-gradient(to top,var(--bg) 62%,rgba(13,14,17,0));z-index:3}
+.dock-in{max-width:780px;margin:0 auto;background:rgba(21,23,28,.86);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--line);border-radius:22px;padding:12px 16px 10px}
+.seek{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.seek span{min-width:42px}
+.seek span:last-child{text-align:right}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:22px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p,0%),rgba(255,255,255,.12) var(--p,0%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;margin-top:-5px;box-shadow:0 1px 4px rgba(0,0,0,.5);transition:transform .12s}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(1.2)}
+.ctrl{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+.ctrl .group{display:flex;align-items:center;gap:4px;flex:1}
+.ctrl .group.r{justify-content:flex-end}
+.ctrl .mid{display:flex;align-items:center;gap:6px}
+.ctrl button.c{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:var(--text);transition:background .15s}
+.ctrl button.c:hover{background:var(--surface-2)}
+.ctrl button.c svg{width:20px;height:20px}
+.play{width:52px!important;height:52px!important;border-radius:50%!important;background:var(--accent);color:#1a1206!important}
+.play:hover{background:#ffc274!important}
+.play svg{width:22px!important;height:22px!important}
+.chip{height:32px;padding:0 11px;border-radius:10px;font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;
+  border:1px solid transparent;transition:background .15s,color .15s,border-color .15s;font-variant-numeric:tabular-nums}
+.chip:hover{background:var(--surface-2);color:var(--text)}
+.chip[aria-pressed=true]{color:var(--accent);background:var(--accent-soft);border-color:rgba(255,180,84,.3)}
+.chip svg{width:15px;height:15px}
+.pop{position:absolute;bottom:calc(100% + 8px);right:0;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:6px;display:none;grid-template-columns:repeat(4,1fr);gap:2px;box-shadow:0 12px 32px rgba(0,0,0,.5);min-width:228px}
+.pop.open{display:grid}
+.pop button{padding:8px 0;border-radius:9px;font-size:12.5px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.pop button:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.pop button[aria-pressed=true]{background:var(--accent);color:#1a1206;font-weight:600}
+.rel{position:relative}
+
+#toast{position:fixed;left:50%;top:calc(70px + var(--safe-t));transform:translateX(-50%) translateY(-8px);background:var(--surface-2);border:1px solid var(--line);
+  padding:9px 16px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:9}
+#toast.on{opacity:1;transform:translateX(-50%)}
+
+@media (max-width:560px){
+  header{padding-left:14px;padding-right:14px;gap:8px}
+  .seg button{padding:6px 9px}
+  #scroller{padding-left:12px;padding-right:12px}
+  .dock{padding-left:10px;padding-right:10px}
+  .cue{padding:12px 14px}
+  .cue .en{font-size:calc(19px*var(--fs))} .cue .ko{font-size:calc(15.5px*var(--fs))}
+  .ctrl button.c{width:36px;height:36px}
+  .chip{padding:0 8px}
+  .hide-sm{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><b id="title">Sync Player</b><span id="subtitle">영어 · 한국어 동시 자막 플레이어</span></div>
+    <div class="seg" id="modeSeg" role="group" aria-label="표시 언어">
+      <button data-mode="both" aria-pressed="true">영·한</button>
+      <button data-mode="en" aria-pressed="false">EN</button>
+      <button data-mode="ko" aria-pressed="false">한</button>
+    </div>
+    <button class="iconbtn" id="fsDown" title="글자 작게" aria-label="글자 작게"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19l5-13 5 13M6 14h6M17 12h4"/></svg></button>
+    <button class="iconbtn" id="fsUp" title="글자 크게" aria-label="글자 크게"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 19l6-15 6 15M5.5 14h7M19 9v6M16 12h6"/></svg></button>
+    <button class="iconbtn" id="openMore" title="파일 다시 선택" aria-label="파일 다시 선택"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+  </header>
+
+  <main>
+    <div id="empty">
+      <div class="card">
+        <h1>Sync Player</h1>
+        <p>오디오와 영·한 자막을 열면<br>음성에 맞춰 문장이 함께 넘어갑니다.</p>
+        <div class="pick">
+          <button id="pickAudio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><b>오디오 열기</b><small>mp3 · m4a · wav · mp4</small></button>
+          <button id="pickSub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h4M13 10h4M7 14h6"/></svg><b>자막 열기</b><small>translated.json · srt · vtt</small></button>
+        </div>
+        <div class="hint">파일을 이 창에 끌어다 놓아도 됩니다</div>
+      </div>
+    </div>
+    <div id="scroller" aria-live="off"><div class="list" id="list"></div></div>
+
+    <div class="dock" id="dock" hidden>
+      <div class="dock-in">
+        <div class="seek"><span id="cur">0:00</span><input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="재생 위치"><span id="dur">0:00</span></div>
+        <div class="ctrl">
+          <div class="group">
+            <button class="chip" id="loopBtn" aria-pressed="false" title="현재 문장 반복 (L)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg><span class="hide-sm">문장 반복</span></button>
+          </div>
+          <div class="mid">
+            <button class="c" id="prev" title="이전 문장 (↑)" aria-label="이전 문장"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+            <button class="c" id="back" title="5초 뒤로 (←)" aria-label="5초 뒤로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><text x="8.2" y="15.5" font-size="7.5" fill="currentColor" stroke="none" font-weight="700">5</text></svg></button>
+            <button class="c play" id="play" title="재생 / 일시정지 (Space)" aria-label="재생"><svg id="icoPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><svg id="icoPause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
+            <button class="c" id="fwd" title="5초 앞으로 (→)" aria-label="5초 앞으로"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/><text x="8.2" y="15.5" font-size="7.5" fill="currentColor" stroke="none" font-weight="700">5</text></svg></button>
+            <button class="c" id="next" title="다음 문장 (↓)" aria-label="다음 문장"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+          </div>
+          <div class="group r rel">
+            <button class="chip" id="speedBtn" title="재생 속도">1.0×</button>
+            <div class="pop" id="speedPop"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast"></div>
+
+<input type="file" id="fAudio" accept="audio/*,video/*,.m4a,.mp3,.wav,.aac,.ogg,.flac,.mp4" hidden>
+<input type="file" id="fSub" accept=".json,.srt,.vtt,.txt,application/json,text/*" multiple hidden>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const audio = new Audio(); audio.preload = 'auto';
+const S = { cues: [], active: -1, loop: false, mode: 'both', fs: 1, rate: 1, audioName: '', subNames: [], userScrollUntil: 0 };
+const RATES = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+
+/* ---------- 저장된 설정 ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('bp_'+k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k, v){ try{ localStorage.setItem('bp_'+k, JSON.stringify(v)); }catch(e){} }
+};
+S.mode = store.get('mode','both'); S.fs = store.get('fs',1); S.rate = store.get('rate',1);
+
+/* ---------- 유틸 ---------- */
+const fmt = t => { if(!isFinite(t)) t = 0; t = Math.max(0,t); const m = Math.floor(t/60), s = Math.floor(t%60); const h = Math.floor(m/60);
+  return h ? `${h}:${String(m%60).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`; };
+const hasKo = s => /[ㄱ-ㆎ가-힣]/.test(s||'');
+const koRatio = s => { const l = (s||'').replace(/[\s\d_]|\p{P}|\p{S}/gu,''); if(!l) return 0; const k = (l.match(/[ㄱ-ㆎ가-힣]/g)||[]).length; return k/l.length; };
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'),2600); }
+const esc = s => String(s??'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ---------- 자막 파서 ---------- */
+function tsToSec(s){ const m = s.trim().replace(',','.').match(/(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)/); if(!m) return NaN; return (+m[1]||0)*3600 + (+m[2])*60 + parseFloat(m[3]); }
+function parseSrtVtt(txt){
+  const out = []; const blocks = txt.replace(/\r/g,'').replace(/^﻿/,'').split(/\n{2,}/);
+  for(const b of blocks){
+    const lines = b.split('\n').filter(l=>l.trim()!==''); if(!lines.length) continue;
+    const i = lines.findIndex(l=>l.includes('-->')); if(i<0) continue;
+    const [a, c] = lines[i].split('-->'); const start = tsToSec(a), end = tsToSec(c.trim().split(/\s+/)[0]);
+    const body = lines.slice(i+1).map(l=>l.replace(/<[^>]+>/g,'').trim()).filter(Boolean);
+    if(isNaN(start) || !body.length) continue;
+    out.push({ start, end: isNaN(end)?start+3:end, lines: body });
+  }
+  return out;
+}
+function fromJson(data){
+  const arr = Array.isArray(data) ? data : (data.segments || data.rows || data.sentences || data.items || []);
+  return arr.map(r => ({
+    start: +(r.start ?? r.s ?? 0), end: +(r.end ?? r.e ?? NaN),
+    en: String(r.text ?? r.en ?? r.english ?? r.source ?? ''),
+    ko: String(r.ko ?? r.korean ?? r.translation ?? r.kr ?? ''),
+    unsure: !!(r.unsure ?? r.uncertain ?? r.flag)
+  })).filter(c => (c.en || c.ko) && !isNaN(c.start));
+}
+function cuesFromSrt(list){            // 한 파일 안에서 줄 단위로 언어 분리
+  return list.map(c => { const en=[], ko=[];
+    c.lines.forEach(l => (koRatio(l) > .3 ? ko : en).push(l));
+    const mark = /⚠/.test(c.lines.join(' '));
+    return { start:c.start, end:c.end, en:en.join(' ').replace(/⚠\s*/g,''), ko:ko.join(' ').replace(/⚠\s*/g,''), unsure:mark };
+  });
+}
+function mergeLangs(enList, koList){   // 영어 파일 + 한국어 파일 → 시작시간/순서로 매칭
+  if(!enList.length) return koList; if(!koList.length) return enList;
+  if(enList.length === koList.length) return enList.map((c,i)=>({...c, ko: koList[i].ko || koList[i].en}));
+  return enList.map(c => { let best=null, bd=1e9; for(const k of koList){ const d=Math.abs(k.start-c.start); if(d<bd){bd=d;best=k;} }
+    return {...c, ko: best && bd < 4 ? (best.ko||best.en) : ''}; });
+}
+async function readSubs(files){
+  let combined = [], enOnly = [], koOnly = [];
+  for(const f of files){
+    const txt = await f.text(); const name = f.name.toLowerCase();
+    try{
+      if(name.endsWith('.json')){ combined = combined.concat(fromJson(JSON.parse(txt))); continue; }
+      const cues = cuesFromSrt(parseSrtVtt(txt)); if(!cues.length) continue;
+      const kShare = cues.filter(c=>c.ko).length / cues.length, eShare = cues.filter(c=>c.en).length / cues.length;
+      if(kShare > .7 && eShare > .7) combined = combined.concat(cues);          // 한 파일에 영·한
+      else if(kShare > .7) koOnly = koOnly.concat(cues.map(c=>({...c, ko:c.ko||c.en, en:''})));
+      else enOnly = enOnly.concat(cues);
+    }catch(e){ toast(`${f.name} 을(를) 읽지 못했습니다`); }
+  }
+  let cues = combined.length ? combined : mergeLangs(enOnly, koOnly);
+  cues = cues.filter(c => c.en || c.ko).sort((a,b)=>a.start-b.start);
+  cues.forEach((c,i)=>{ if(isNaN(c.end) || c.end <= c.start) c.end = (cues[i+1]?.start ?? c.start+4); });
+  return cues;
+}
+
+/* ---------- 렌더 ---------- */
+function render(){
+  const list = $('#list'); list.innerHTML = '';
+  S.cues.forEach((c,i) => {
+    const b = document.createElement('button'); b.className = 'cue'; b.dataset.i = i;
+    b.innerHTML = `<div class="t"><span>${fmt(c.start)}</span>${c.unsure?'<span class="warn" title="음질이 나빠 확실하지 않은 문장">⚠ 확인 필요</span>':''}</div>`
+      + (c.en ? `<div class="en">${esc(c.en)}</div>` : '') + (c.ko ? `<div class="ko">${esc(c.ko)}</div>` : '');
+    b.addEventListener('click', () => { seekTo(c.start + 0.01); audio.play().catch(()=>{}); });
+    list.appendChild(b);
+  });
+  S.active = -1; applyMode(); updateDock();
+}
+function applyMode(){
+  $('#scroller').className = 'mode-' + S.mode;
+  document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
+  document.documentElement.style.setProperty('--fs', S.fs);
+}
+function updateDock(){
+  const ready = S.cues.length || audio.src;
+  $('#empty').style.display = (S.cues.length && audio.src) ? 'none' : 'grid';
+  $('#dock').hidden = !audio.src;
+  $('#empty .pick #pickAudio').classList.toggle('done', !!audio.src);
+  $('#empty .pick #pickSub').classList.toggle('done', !!S.cues.length);
+  const parts = []; if(S.audioName) parts.push(S.audioName); if(S.cues.length) parts.push(`${S.cues.length}문장`);
+  $('#title').textContent = S.audioName ? S.audioName.replace(/\.[^.]+$/,'') : 'Sync Player';
+  $('#subtitle').textContent = parts.length ? parts.join(' · ') : '영어 · 한국어 동시 자막 플레이어';
+  // 자막만 열렸거나 오디오만 열린 경우 안내
+  if(S.cues.length && !audio.src) $('#empty .card p').innerHTML = '자막이 준비되었습니다.<br>이제 오디오를 열어 주세요.';
+  else if(audio.src && !S.cues.length) $('#empty .card p').innerHTML = '오디오가 준비되었습니다.<br>이제 자막을 열어 주세요.';
+}
+
+/* ---------- 재생 동기화 ---------- */
+function findActive(t){
+  const c = S.cues; if(!c.length || t < c[0].start - 0.2) return -1;
+  let lo = 0, hi = c.length - 1;
+  while(lo < hi){ const m = (lo + hi + 1) >> 1; if(c[m].start <= t + 0.05) lo = m; else hi = m - 1; }
+  return lo;
+}
+function setActive(i, smooth=true){
+  if(i === S.active) return;
+  const els = $('#list').children;
+  if(S.active >= 0 && els[S.active]) els[S.active].classList.remove('active');
+  S.active = i;
+  if(i >= 0 && els[i]){ els[i].classList.add('active'); if(performance.now() > S.userScrollUntil) centerOn(els[i], smooth); }
+}
+function centerOn(el, smooth){
+  const sc = $('#scroller'); const target = el.offsetTop - (sc.clientHeight - el.offsetHeight) / 2 + 20;
+  if(smooth && !matchMedia('(prefers-reduced-motion:reduce)').matches) sc.scrollTo({ top: target, behavior: 'smooth' }); else sc.scrollTop = target;
+}
+function tick(){
+  const t = audio.currentTime;
+  if(S.loop && S.cues.length){
+    // 반복 대상은 "사용자가 위치시킨 문장". 재생이 자연스럽게 끝에 닿으면 처음으로, 사용자가 다른 곳으로 옮기면 그 문장으로 갱신
+    let L = S.cues[S.loopIdx];
+    if(!L || t < L.start - 0.3 || t > L.end + 0.3){ S.loopIdx = findActive(t); L = S.cues[S.loopIdx]; }
+    if(L && t >= L.end - 0.03 && !audio.paused){ audio.currentTime = L.start + 0.01; setActive(S.loopIdx); }
+  }
+  setActive(findActive(audio.currentTime));
+  if(!seeking){ const d = audio.duration || 0; const v = d ? (audio.currentTime / d) * 1000 : 0; $('#seek').value = v; $('#seek').style.setProperty('--p', (v/10)+'%'); }
+  $('#cur').textContent = fmt(audio.currentTime);
+  if(!audio.paused) raf = requestAnimationFrame(tick);
+}
+let raf = 0, seeking = false;
+function seekTo(t){ audio.currentTime = Math.max(0, Math.min(audio.duration || 1e9, t)); tick(); }
+function stepCue(dir){
+  const base = S.active < 0 ? 0 : S.active; let i = base + dir;
+  if(dir < 0 && audio.currentTime - (S.cues[base]?.start ?? 0) > 1.5) i = base;   // 문장 중간이면 문장 처음으로
+  i = Math.max(0, Math.min(S.cues.length - 1, i)); if(S.cues[i]) seekTo(S.cues[i].start + 0.01);
+}
+
+audio.addEventListener('play', () => { $('#icoPlay').style.display='none'; $('#icoPause').style.display=''; $('#play').setAttribute('aria-label','일시정지'); cancelAnimationFrame(raf); raf = requestAnimationFrame(tick); });
+audio.addEventListener('pause', () => { $('#icoPlay').style.display=''; $('#icoPause').style.display='none'; $('#play').setAttribute('aria-label','재생'); cancelAnimationFrame(raf); tick(); savePos(); });
+audio.addEventListener('timeupdate', () => { if(audio.paused) tick(); });
+audio.addEventListener('loadedmetadata', () => { $('#dur').textContent = fmt(audio.duration); audio.playbackRate = S.rate; restorePos(); tick(); });
+audio.addEventListener('ended', () => { savePos(0); });
+audio.addEventListener('error', () => toast('이 오디오 형식은 재생할 수 없습니다 (mp3/m4a/wav 권장)'));
+setInterval(() => { if(!audio.paused) savePos(); }, 5000);
+
+function posKey(){ return 'pos_' + S.audioName; }
+function savePos(v){ if(S.audioName) store.set(posKey(), v ?? audio.currentTime); }
+function restorePos(){ const p = store.get(posKey(), 0); if(p > 2 && p < audio.duration - 2){ audio.currentTime = p; toast(`이전 위치 ${fmt(p)} 에서 이어서 재생`); } }
+
+/* ---------- 파일 열기 ---------- */
+function loadAudio(file){
+  if(audio.src) URL.revokeObjectURL(audio.src);
+  audio.src = URL.createObjectURL(file); S.audioName = file.name; audio.load(); updateDock();
+}
+async function loadSubs(files){
+  const cues = await readSubs(files);
+  if(!cues.length){ toast('자막에서 문장을 찾지 못했습니다'); return; }
+  S.cues = cues; S.subNames = files.map(f=>f.name); render();
+  if(cues.some(c=>!c.ko)) toast('한국어가 없는 문장이 있습니다');
+}
+async function handleFiles(files){
+  const arr = [...files]; const subs = arr.filter(f => /\.(json|srt|vtt|txt)$/i.test(f.name));
+  const aud = arr.find(f => f.type.startsWith('audio/') || f.type.startsWith('video/') || /\.(mp3|m4a|wav|aac|ogg|flac|mp4|webm|opus)$/i.test(f.name));
+  if(aud) loadAudio(aud); if(subs.length) await loadSubs(subs);
+  if(!aud && !subs.length) toast('지원하지 않는 파일입니다');
+}
+// Android(WebView)의 파일 선택창은 .srt/.vtt 같은 확장자를 걸러버릴 수 있어 필터를 해제
+if(window.Capacitor || /Android/i.test(navigator.userAgent)) $('#fSub').removeAttribute('accept');
+$('#pickAudio').onclick = () => $('#fAudio').click();
+$('#pickSub').onclick = () => $('#fSub').click();
+$('#openMore').onclick = () => { $('#empty').style.display='grid'; };
+$('#fAudio').onchange = e => { if(e.target.files[0]) handleFiles([e.target.files[0]]); e.target.value=''; };
+$('#fSub').onchange = e => { if(e.target.files.length) handleFiles(e.target.files); e.target.value=''; };
+['dragenter','dragover'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); document.body.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); if(ev==='drop'||e.target===document.documentElement||!e.relatedTarget) document.body.classList.remove('drag'); }));
+addEventListener('drop', e => { if(e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files); });
+$('#empty').addEventListener('click', e => { if(e.target.id==='empty' && S.cues.length && audio.src) $('#empty').style.display='none'; });
+
+/* ---------- 컨트롤 ---------- */
+$('#play').onclick = () => audio.paused ? audio.play().catch(()=>{}) : audio.pause();
+$('#back').onclick = () => seekTo(audio.currentTime - 5);
+$('#fwd').onclick = () => seekTo(audio.currentTime + 5);
+$('#prev').onclick = () => stepCue(-1);
+$('#next').onclick = () => stepCue(1);
+$('#loopBtn').onclick = toggleLoop;
+function toggleLoop(){ S.loop = !S.loop; S.loopIdx = S.loop ? findActive(audio.currentTime) : -1; $('#loopBtn').setAttribute('aria-pressed', S.loop); toast(S.loop ? '현재 문장을 반복합니다' : '문장 반복 해제'); }
+const seek = $('#seek');
+seek.addEventListener('input', () => { seeking = true; const v = +seek.value; seek.style.setProperty('--p', (v/10)+'%'); const t = (v/1000)*(audio.duration||0); $('#cur').textContent = fmt(t); audio.currentTime = t; setActive(findActive(t), false); });
+seek.addEventListener('change', () => { seeking = false; });
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; store.set('mode', S.mode); applyMode(); if(S.active>=0) centerOn($('#list').children[S.active], false); });
+function setFs(d){ S.fs = Math.max(.8, Math.min(1.7, +(S.fs + d).toFixed(2))); store.set('fs', S.fs); applyMode(); if(S.active>=0) centerOn($('#list').children[S.active], false); }
+$('#fsUp').onclick = () => setFs(.1); $('#fsDown').onclick = () => setFs(-.1);
+
+/* 속도 */
+function setRate(r){ S.rate = r; audio.playbackRate = r; store.set('rate', r); $('#speedBtn').textContent = r.toFixed(r%1?2:1).replace(/(\.\d)0$/,'$1') + '×';
+  document.querySelectorAll('#speedPop button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.r === r)); }
+RATES.forEach(r => { const b = document.createElement('button'); b.dataset.r = r; b.textContent = r + '×'; b.onclick = () => { setRate(r); $('#speedPop').classList.remove('open'); }; $('#speedPop').appendChild(b); });
+$('#speedBtn').onclick = e => { e.stopPropagation(); $('#speedPop').classList.toggle('open'); };
+addEventListener('click', e => { if(!e.target.closest('.rel')) $('#speedPop').classList.remove('open'); });
+audio.preservesPitch = true; audio.mozPreservesPitch = true; audio.webkitPreservesPitch = true;
+setRate(S.rate);
+
+/* 수동 스크롤 중에는 자동 따라가기를 잠깐 멈춤 */
+const sc = $('#scroller');
+['wheel','touchstart','pointerdown'].forEach(ev => sc.addEventListener(ev, () => { S.userScrollUntil = performance.now() + 3500; }, { passive: true }));
+
+/* 키보드 */
+addEventListener('keydown', e => {
+  if(e.target.matches('input[type=range]') && ['ArrowLeft','ArrowRight'].includes(e.key)) e.target.blur();
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  switch(e.key){
+    case ' ': e.preventDefault(); $('#play').click(); break;
+    case 'ArrowLeft': e.preventDefault(); $('#back').click(); break;
+    case 'ArrowRight': e.preventDefault(); $('#fwd').click(); break;
+    case 'ArrowUp': e.preventDefault(); stepCue(-1); break;
+    case 'ArrowDown': e.preventDefault(); stepCue(1); break;
+    case 'l': case 'L': toggleLoop(); break;
+    case 'r': case 'R': if(S.active>=0){ seekTo(S.cues[S.active].start + .01); } break;
+    case '[': setRate(RATES[Math.max(0, RATES.indexOf(S.rate) - 1)]); break;
+    case ']': setRate(RATES[Math.min(RATES.length-1, RATES.indexOf(S.rate) + 1)]); break;
+    case '1': S.mode='both'; applyMode(); break; case '2': S.mode='en'; applyMode(); break; case '3': S.mode='ko'; applyMode(); break;
+  }
+});
+
+/* 잠금화면/이어폰 미디어 키 */
+if('mediaSession' in navigator){
+  navigator.mediaSession.setActionHandler('play', () => audio.play());
+  navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+  navigator.mediaSession.setActionHandler('previoustrack', () => stepCue(-1));
+  navigator.mediaSession.setActionHandler('nexttrack', () => stepCue(1));
+  navigator.mediaSession.setActionHandler('seekbackward', () => seekTo(audio.currentTime - 5));
+  navigator.mediaSession.setActionHandler('seekforward', () => seekTo(audio.currentTime + 5));
+}
+
+/* 테스트/자동화용 */
+window.__bp = { S, audio, handleFiles, findActive };
+applyMode(); updateDock();
+})();
+</script>
+</body>
+</html>

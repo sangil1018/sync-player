@@ -1,0 +1,7 @@
+{
+  "appId": "com.fluxion.syncplayer",
+  "appName": "Sync Player",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "backgroundColor": "#0d0e11"
+}

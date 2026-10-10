@@ -1,0 +1,50 @@
+[
+ {
+  "id": 0,
+  "start": 0.5,
+  "end": 4.0,
+  "text": "Okay everyone, let's start with pure Balboa today.",
+  "ko": "자, 여러분, 오늘은 퓨어 발보아부터 시작하겠습니다.",
+  "unsure": false
+ },
+ {
+  "id": 1,
+  "start": 4.0,
+  "end": 8.5,
+  "text": "Keep your chest connection and don't push with your arms.",
+  "ko": "체스트 커넥션을 유지하고 팔로 밀지 마세요.",
+  "unsure": false
+ },
+ {
+  "id": 2,
+  "start": 8.5,
+  "end": 12.5,
+  "text": "Rock step, step step, five six seven eight.",
+  "ko": "락 스텝, 스텝 스텝, 파이브 식스 세븐 에이트.",
+  "unsure": false
+ },
+ {
+  "id": 3,
+  "start": 12.5,
+  "end": 17.0,
+  "text": "Follows, your weight change should happen on the and count.",
+  "ko": "팔로워는 체중 이동을 '앤' 카운트에 해 주세요.",
+  "unsure": true
+ },
+ {
+  "id": 4,
+  "start": 17.0,
+  "end": 22.0,
+  "text": "Now add a swivel, and let the lead guide the break away.",
+  "ko": "이제 스위블을 더하고, 리더가 브레이크 어웨이를 이끌게 하세요.",
+  "unsure": false
+ },
+ {
+  "id": 5,
+  "start": 22.0,
+  "end": 29.0,
+  "text": "Good. Let's try that with the music, nice and relaxed.",
+  "ko": "좋아요. 음악에 맞춰, 편안하게 해 봅시다.",
+  "unsure": false
+ }
+]

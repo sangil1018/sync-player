@@ -1,0 +1,88 @@
+{
+  "name": "sync-player",
+  "productName": "Sync Player",
+  "version": "1.0.0",
+  "description": "영어·한국어 동시 자막 오디오 플레이어",
+  "main": "electron/main.js",
+  "author": "Zinger",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android",
+    "build:all-desktop": "electron-builder --win --mac"
+  },
+  "build": {
+    "appId": "com.fluxion.syncplayer",
+    "productName": "Sync Player",
+    "files": [
+      "electron/**",
+      "www/**",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.music",
+      "icon": "build/icon.png",
+      "identity": null
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "AudioVideo",
+      "icon": "build/icon.png"
+    },
+    "artifactName": "SyncPlayer-${version}-${os}-${arch}.${ext}",
+    "afterPack": "build/afterPack.js"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/android": "^6.1.2"
+  }
+}
