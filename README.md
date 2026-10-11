@@ -3,10 +3,18 @@
 강습 녹음을 재생하면서 영어·한국어 자막을 함께 보는 플레이어. Windows · Mac · Android.
 
 ## 사용법
-1. **오디오 열기** → 강습 녹음(mp3 / m4a / wav / mp4)
-2. **자막 열기** → 받아쓰기 앱이 만든 `translated.json`
-   (영어 SRT + 한국어 SRT 2개를 같이 선택해도 되고, 영·한이 함께 든 SRT/VTT 1개도 됩니다)
-3. 재생하면 현재 문장이 화면 가운데에서 강조되며 자동으로 넘어갑니다. 문장을 누르면 그 지점부터 재생.
+**파일 열기** 한 번이면 됩니다. 음성 또는 자막 중 하나만 골라도 **같은 이름의 짝 파일을 자동으로 불러옵니다.**
+
+| 고른 파일 | 자동으로 찾는 파일 |
+|---|---|
+| `lesson.m4a` | `lesson.json` (없으면 `lesson.srt`, 또는 `lesson.en.srt` + `lesson.ko.srt`) |
+| `lesson.json` / `lesson.ko.srt` | `lesson.m4a` (같은 이름의 오디오) |
+| `enhanced.wav` ↔ `translated.json` | 받아쓰기 앱의 결과 폴더(`work/<이름>/`)는 이름이 달라도 짝으로 인식 |
+
+- 이름 비교는 확장자와 `.en` `.ko` `_en` `-ko` `.translated` 같은 꼬리표를 뗀 뒤, 대소문자·한글 자모 형태(Mac/Windows 차이)를 무시하고 합니다.
+- **Windows · Mac 앱**: 파일 하나만 골라도(끌어다 놓아도) 같은 폴더에서 짝을 찾습니다.
+- **Android · 웹 브라우저**: 보안상 앱이 같은 폴더를 읽을 수 없어서, 파일 선택창에서 **음성과 자막을 함께 여러 개 선택**하면 이름으로 자동 연결됩니다.
+- 이름이 달라도 직접 함께 고른 파일은 그대로 사용합니다. 아래 "오디오만 선택 / 자막만 선택"은 한쪽만 바꿀 때 씁니다.
 
 | 기능 | 조작 |
 |---|---|
@@ -42,4 +50,5 @@ npx cap sync android && cd android && ./gradlew assembleDebug   # APK (JDK 17+, 
 
 ## 구조
 `www/index.html` 하나가 전체 앱입니다. Electron(데스크톱)과 Capacitor(Android)가 이 파일을 그대로 감쌉니다.
-`test/verify.py` 는 헤드리스 브라우저 검증 스크립트입니다.
+`electron/preload.js` 는 데스크톱에서 같은 폴더의 짝 파일을 찾는 데만 쓰는 최소 기능(읽기 전용)입니다.
+`test/verify.py`·`verify_auto.py`(웹), `verify_electron.py`(데스크톱 앱) 는 검증 스크립트입니다.

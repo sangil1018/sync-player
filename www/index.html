@@ -59,7 +59,12 @@ main{flex:1;position:relative;min-height:0}
 .card{width:min(440px,100%);text-align:center}
 .card h1{font-size:26px;font-weight:650;letter-spacing:-.02em;margin:0 0 8px}
 .card p{margin:0 0 26px;color:var(--muted);font-size:14px;line-height:1.6}
-.pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pick{display:grid;grid-template-columns:1fr;gap:10px}
+.pick2{display:flex;justify-content:center;gap:4px;margin-top:12px}
+.pick2 button{padding:8px 14px;border-radius:10px;font-size:12.5px;color:var(--muted);transition:background .15s,color .15s}
+.pick2 button:hover{background:var(--surface);color:var(--text)}
+.pick2 button.done{color:var(--accent)}
+.pick2 button.done::before{content:"✓ "}
 .pick button{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 12px;display:flex;flex-direction:column;align-items:center;gap:10px;
   transition:background .18s,border-color .18s,transform .12s}
 .pick button:hover{background:var(--surface-2);border-color:rgba(255,255,255,.14)}
@@ -141,12 +146,15 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.2)}
     <div id="empty">
       <div class="card">
         <h1>Sync Player</h1>
-        <p>오디오와 영·한 자막을 열면<br>음성에 맞춰 문장이 함께 넘어갑니다.</p>
+        <p id="emptyMsg">음성 또는 자막 파일을 열면<br>같은 이름의 짝 파일을 자동으로 불러옵니다.</p>
         <div class="pick">
-          <button id="pickAudio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><b>오디오 열기</b><small>mp3 · m4a · wav · mp4</small></button>
-          <button id="pickSub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h4M13 10h4M7 14h6"/></svg><b>자막 열기</b><small>translated.json · srt · vtt</small></button>
+          <button id="pickAny"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><b>파일 열기</b><small>mp3 · m4a · wav · mp4 · json · srt · vtt</small></button>
         </div>
-        <div class="hint">파일을 이 창에 끌어다 놓아도 됩니다</div>
+        <div class="pick2">
+          <button id="pickAudio">오디오만 선택</button>
+          <button id="pickSub">자막만 선택</button>
+        </div>
+        <div class="hint" id="emptyHint">파일을 이 창에 끌어다 놓아도 됩니다</div>
       </div>
     </div>
     <div id="scroller" aria-live="off"><div class="list" id="list"></div></div>
@@ -176,6 +184,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.2)}
 </div>
 <div id="toast"></div>
 
+<input type="file" id="fAny" accept="audio/*,video/*,.m4a,.mp3,.wav,.aac,.ogg,.flac,.mp4,.json,.srt,.vtt,.txt" multiple hidden>
 <input type="file" id="fAudio" accept="audio/*,video/*,.m4a,.mp3,.wav,.aac,.ogg,.flac,.mp4" hidden>
 <input type="file" id="fSub" accept=".json,.srt,.vtt,.txt,application/json,text/*" multiple hidden>
 
@@ -243,7 +252,7 @@ async function readSubs(files){
   for(const f of files){
     const txt = await f.text(); const name = f.name.toLowerCase();
     try{
-      if(name.endsWith('.json')){ combined = combined.concat(fromJson(JSON.parse(txt))); continue; }
+      if(name.endsWith('.json')){ combined = combined.concat(fromJson(JSON.parse(txt.replace(/^﻿/, '')))); continue; }
       const cues = cuesFromSrt(parseSrtVtt(txt)); if(!cues.length) continue;
       const kShare = cues.filter(c=>c.ko).length / cues.length, eShare = cues.filter(c=>c.en).length / cues.length;
       if(kShare > .7 && eShare > .7) combined = combined.concat(cues);          // 한 파일에 영·한
@@ -278,14 +287,16 @@ function updateDock(){
   const ready = S.cues.length || audio.src;
   $('#empty').style.display = (S.cues.length && audio.src) ? 'none' : 'grid';
   $('#dock').hidden = !audio.src;
-  $('#empty .pick #pickAudio').classList.toggle('done', !!audio.src);
-  $('#empty .pick #pickSub').classList.toggle('done', !!S.cues.length);
+  $('#pickAudio').classList.toggle('done', !!audio.src);
+  $('#pickSub').classList.toggle('done', !!S.cues.length);
   const parts = []; if(S.audioName) parts.push(S.audioName); if(S.cues.length) parts.push(`${S.cues.length}문장`);
   $('#title').textContent = S.audioName ? S.audioName.replace(/\.[^.]+$/,'') : 'Sync Player';
   $('#subtitle').textContent = parts.length ? parts.join(' · ') : '영어 · 한국어 동시 자막 플레이어';
   // 자막만 열렸거나 오디오만 열린 경우 안내
-  if(S.cues.length && !audio.src) $('#empty .card p').innerHTML = '자막이 준비되었습니다.<br>이제 오디오를 열어 주세요.';
-  else if(audio.src && !S.cues.length) $('#empty .card p').innerHTML = '오디오가 준비되었습니다.<br>이제 자막을 열어 주세요.';
+  const msg = $('#emptyMsg');
+  if(S.cues.length && !audio.src) msg.innerHTML = '자막이 준비되었습니다.<br>같은 이름의 오디오를 함께 선택해 주세요.';
+  else if(audio.src && !S.cues.length) msg.innerHTML = '오디오가 준비되었습니다.<br>같은 이름의 자막을 함께 선택해 주세요.';
+  else msg.innerHTML = '음성 또는 자막 파일을 열면<br>같은 이름의 짝 파일을 자동으로 불러옵니다.';
 }
 
 /* ---------- 재생 동기화 ---------- */
@@ -340,29 +351,129 @@ function savePos(v){ if(S.audioName) store.set(posKey(), v ?? audio.currentTime)
 function restorePos(){ const p = store.get(posKey(), 0); if(p > 2 && p < audio.duration - 2){ audio.currentTime = p; toast(`이전 위치 ${fmt(p)} 에서 이어서 재생`); } }
 
 /* ---------- 파일 열기 ---------- */
+let objUrl = '';
 function loadAudio(file){
-  if(audio.src) URL.revokeObjectURL(audio.src);
-  audio.src = URL.createObjectURL(file); S.audioName = file.name; audio.load(); updateDock();
+  if(objUrl) URL.revokeObjectURL(objUrl);
+  objUrl = URL.createObjectURL(file); audio.src = objUrl; S.audioName = file.name; audio.load(); updateDock();
+}
+function loadAudioUrl(url, name){                 // Electron: 같은 폴더의 오디오를 파일 경로로 바로 연결(대용량 복사 없음)
+  if(objUrl){ URL.revokeObjectURL(objUrl); objUrl = ''; }
+  audio.src = url; S.audioName = name; audio.load(); updateDock();
 }
 async function loadSubs(files){
   const cues = await readSubs(files);
-  if(!cues.length){ toast('자막에서 문장을 찾지 못했습니다'); return; }
+  if(!cues.length){ toast('자막에서 문장을 찾지 못했습니다'); return false; }
   S.cues = cues; S.subNames = files.map(f=>f.name); render();
   if(cues.some(c=>!c.ko)) toast('한국어가 없는 문장이 있습니다');
+  return true;
 }
-async function handleFiles(files){
-  const arr = [...files]; const subs = arr.filter(f => /\.(json|srt|vtt|txt)$/i.test(f.name));
-  const aud = arr.find(f => f.type.startsWith('audio/') || f.type.startsWith('video/') || /\.(mp3|m4a|wav|aac|ogg|flac|mp4|webm|opus)$/i.test(f.name));
-  if(aud) loadAudio(aud); if(subs.length) await loadSubs(subs);
-  if(!aud && !subs.length) toast('지원하지 않는 파일입니다');
+
+/* ---- 같은 이름 짝 찾기 ----
+   "lesson.m4a" ↔ "lesson.json" / "lesson.srt" / "lesson.en.srt" + "lesson.ko.srt"
+   (이름은 확장자와 .en/.ko/_en/-ko/.translated 같은 꼬리표를 뗀 뒤 비교, 대소문자·한글 NFC/NFD 무시)
+   규칙에 맞는 짝이 없으면 앱의 표준 결과 이름으로 한 번 더 찾음: translated.json ↔ enhanced.*             */
+const AUDIO_RE = /\.(mp3|m4a|wav|aac|ogg|flac|mp4|webm|opus|m4b|mov|mkv)$/i;
+const SUB_RE = /\.(json|srt|vtt|txt)$/i;
+const AUTO_SUB_RE = /\.(json|srt|vtt)$/i;
+const LANG_TAIL = /[ ._-](en|eng|english|ko|kor|korean|kr|translated|bilingual|en-ko|ko-en|enko|koen)$/i;
+const isAudioFile = f => /^(audio|video)\//.test(f.type || '') || AUDIO_RE.test(f.name);
+function stemOf(name){
+  let s = name.normalize('NFC').replace(/\.[^.]+$/, '').trim(), p;
+  do { p = s; s = s.replace(LANG_TAIL, '').trim(); } while (s !== p);
+  return s.toLowerCase();
+}
+function chooseSubs(group, picked){               // json이 있으면 json 하나, 없으면 srt/vtt 전부(영·한 따로일 수 있음)
+  const isJson = e => /\.json$/i.test(e.name);
+  if(picked && isJson(picked)) return [picked];
+  const js = group.filter(isJson);
+  if(!picked && js.length) return [js[0]];
+  return group.filter(e => !isJson(e));
+}
+// base: 사용자가 고른 파일, pool: 같은 폴더(또는 함께 고른) 파일들 → {audio, subs}
+function companionsFor(base, pool){
+  const stem = stemOf(base.name);
+  const others = pool.filter(e => e.name !== base.name);
+  const sameStem = list => list.filter(e => stemOf(e.name) === stem);
+  const subsAll = others.filter(e => AUTO_SUB_RE.test(e.name) && !isAudioFile(e));
+  if(isAudioFile(base)){
+    let g = sameStem(subsAll);
+    if(!g.length){ const t = subsAll.find(e => /^translated\.json$/i.test(e.name)); if(t) g = [t]; }
+    return { audio: base, subs: chooseSubs(g) };
+  }
+  const audios = others.filter(isAudioFile);
+  let a = sameStem(audios)[0];
+  if(!a && /^translated\.json$/i.test(base.name)) a = audios.find(e => /^enhanced\./i.test(e.name));
+  return { audio: a || null, subs: chooseSubs([base, ...sameStem(subsAll)], base) };
+}
+// Electron(Windows/Mac): 고른 파일의 폴더를 직접 읽어 짝 파일을 찾음
+async function nativeCompanions(file){
+  const nat = window.syncNative; if(!nat) return null;
+  let p = ''; try{ p = nat.getPath(file); }catch(e){}
+  if(!p) return null;
+  const sibs = await nat.listSiblings(p);
+  const c = companionsFor({ name: file.name, type: file.type }, sibs);
+  return { ...c, nat, pickedPath: p, picked: file.name };
+}
+async function applyNative(file, c){
+  const { nat } = c; let okAudio = false, okSubs = false;
+  if(c.audio){
+    if(c.audio.name === file.name && isAudioFile(file)) loadAudio(file);
+    else loadAudioUrl(await nat.fileUrl(c.audio.path), c.audio.name);
+    okAudio = true;
+  }
+  if(c.subs.length){
+    const fs = [];
+    for(const s of c.subs) fs.push(s.name === file.name ? file : new File([await nat.readText(s.path)], s.name));
+    okSubs = await loadSubs(fs);
+  }
+  return { okAudio, okSubs };
+}
+
+async function handleFiles(files, opts = {}){
+  const auto = opts.auto !== false;
+  const arr = [...files];
+  const auds = arr.filter(isAudioFile), subs = arr.filter(f => SUB_RE.test(f.name) && !isAudioFile(f));
+  if(!auds.length && !subs.length){ toast('지원하지 않는 파일입니다'); return; }
+
+  // ① 한 번에 여러 개를 골랐다면 이름으로 짝을 맞춤 (모든 환경 공통, Android 포함)
+  if(auds.length && subs.length){
+    const a = auds.find(x => subs.some(s => stemOf(s.name) === stemOf(x.name))) || auds[0];
+    const matched = subs.filter(s => stemOf(s.name) === stemOf(a.name));
+    const picked = matched.length ? chooseSubs(matched) : subs;      // 이름이 달라도 직접 고른 자막은 그대로 사용
+    loadAudio(a); await loadSubs(picked);
+    if(matched.length) toast(`같은 이름으로 연결: ${a.name} + ${picked.map(f=>f.name).join(', ')}`);
+    return;
+  }
+
+  // ② 하나만 골랐다면 같은 폴더에서 짝 파일을 자동으로 찾음 (Electron)
+  if(auto && arr.length === 1){
+    const file = arr[0];
+    let c = null; try{ c = await nativeCompanions(file); }catch(e){ c = null; }
+    if(c){
+      const r = await applyNative(file, c);
+      const asked = isAudioFile(file) ? 'audio' : 'sub';
+      if(asked === 'audio' ? r.okSubs : r.okAudio){
+        toast(`같은 이름으로 연결: ${c.audio.name}${c.subs.length ? ' + ' + c.subs.map(s=>s.name).join(', ') : ''}`);
+      } else if(!(asked === 'audio' ? S.cues.length : audio.src)){
+        toast(asked === 'audio' ? '같은 이름의 자막 파일을 찾지 못했습니다' : '같은 이름의 오디오 파일을 찾지 못했습니다');
+      }
+      return;
+    }
+  }
+
+  // ③ 자동으로 찾을 수 없는 환경(웹 브라우저·Android): 낱개로 불러오고 사용법을 안내
+  if(auds.length){ loadAudio(auds[0]); if(auto && !S.cues.length) toast('자막도 함께 선택하면 같은 이름끼리 자동 연결됩니다 (여러 개 선택)'); }
+  if(subs.length){ await loadSubs(subs); if(auto && !audio.src) toast('오디오도 함께 선택하면 같은 이름끼리 자동 연결됩니다 (여러 개 선택)'); }
 }
 // Android(WebView)의 파일 선택창은 .srt/.vtt 같은 확장자를 걸러버릴 수 있어 필터를 해제
-if(window.Capacitor || /Android/i.test(navigator.userAgent)) $('#fSub').removeAttribute('accept');
+if(window.Capacitor || /Android/i.test(navigator.userAgent)){ $('#fSub').removeAttribute('accept'); $('#fAny').removeAttribute('accept'); }
+$('#pickAny').onclick = () => $('#fAny').click();
 $('#pickAudio').onclick = () => $('#fAudio').click();
 $('#pickSub').onclick = () => $('#fSub').click();
 $('#openMore').onclick = () => { $('#empty').style.display='grid'; };
-$('#fAudio').onchange = e => { if(e.target.files[0]) handleFiles([e.target.files[0]]); e.target.value=''; };
-$('#fSub').onchange = e => { if(e.target.files.length) handleFiles(e.target.files); e.target.value=''; };
+$('#fAny').onchange = e => { if(e.target.files.length) handleFiles(e.target.files); e.target.value=''; };
+$('#fAudio').onchange = e => { if(e.target.files[0]) handleFiles([e.target.files[0]], { auto: false }); e.target.value=''; };
+$('#fSub').onchange = e => { if(e.target.files.length) handleFiles(e.target.files, { auto: false }); e.target.value=''; };
 ['dragenter','dragover'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); document.body.classList.add('drag'); }));
 ['dragleave','drop'].forEach(ev => addEventListener(ev, e => { e.preventDefault(); if(ev==='drop'||e.target===document.documentElement||!e.relatedTarget) document.body.classList.remove('drag'); }));
 addEventListener('drop', e => { if(e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files); });
@@ -425,7 +536,7 @@ if('mediaSession' in navigator){
 }
 
 /* 테스트/자동화용 */
-window.__bp = { S, audio, handleFiles, findActive };
+window.__bp = { S, audio, handleFiles, findActive, stemOf, companionsFor };
 applyMode(); updateDock();
 })();
 </script>
