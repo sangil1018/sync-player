@@ -1,0 +1,123 @@
+import time
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+ROOT=Path('/home/claude/sync_player'); URL=(ROOT/'www/index.html').as_uri(); T=ROOT/'test'; OUT=T/'shots'
+res=[]
+def check(n,c,x=''):
+    res.append(bool(c)); print('PASS' if c else 'FAIL',n,x)
+def ev(pg,js): return pg.evaluate(js)
+def setup(b,w,h):
+    ctx=b.new_context(viewport={'width':w,'height':h}); pg=ctx.new_page(); errs=[]
+    pg.on('pageerror',lambda e:errs.append(str(e))); pg.on('console',lambda m:m.type=='error' and errs.append(m.text))
+    pg.goto(URL); pg.set_input_files('#fAudio',str(T/'sample.wav')); pg.wait_for_function('window.__bp.audio.readyState>=1')
+    pg.set_input_files('#fSub',str(T/'translated.json')); pg.wait_for_selector('.cue'); return pg,errs
+def seek(pg,t): ev(pg,f'window.__bp.audio.currentTime={t}')
+with sync_playwright() as p:
+    b=p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required'])
+    pg,errs=setup(b,1100,760)
+    check('하단 자막 카드 표시', pg.locator('#sub').is_visible())
+    seek(pg,5); pg.click('#play'); time.sleep(.5); pg.click('#play')
+    check('자막 카드가 현재 문장을 따라감', 'Balboa' in pg.inner_text('#subEn') or len(pg.inner_text('#subEn'))>3, pg.inner_text('#subEn')[:40])
+    cue1=ev(pg,'window.__bp.S.cues[1].en')
+    check('카드 영어 = 2번째 문장', pg.inner_text('#subEn').strip()==cue1.strip())
+    check('카드 한국어 표시', len(pg.inner_text('#subKo'))>0)
+    check('문장 번호 2 / 6', pg.inner_text('#subIdx').startswith('2 / 6'), pg.inner_text('#subIdx'))
+    check('영어 단어가 클릭 가능한 span', pg.locator('#subEn .w').count()>=3)
+    # 레이아웃
+    r=ev(pg,"""()=>{const q=s=>document.querySelector(s).getBoundingClientRect();const a=q('#sub .sub-in'),d=q('#dock .dock-in'),s=q('#scroller');return {subBottom:a.bottom,dockTop:d.top,scrollBottom:s.bottom,subTop:a.top,vh:innerHeight,dockBottom:d.bottom}}""")
+    check('자막 카드가 컨트롤과 겹치지 않음', r['subBottom']<=r['dockTop']+1, str(r))
+    check('컨트롤이 화면 안', r['dockBottom']<=r['vh']+1)
+    check('목록이 자막 카드 위에서 끝남', r['scrollBottom']<=r['subTop']+12, str(r))
+    pg.screenshot(path=str(OUT/'10_sub_desktop.png'))
+    # 단어 팝업
+    pg.click('#play'); time.sleep(.2)
+    pg.locator('#subEn .w').first.click()
+    check('단어 클릭 → 일시정지', ev(pg,'window.__bp.audio.paused'))
+    check('단어 팝업 표시', pg.locator('#wordpop').is_visible())
+    w=pg.inner_text('#wpW'); href=pg.get_attribute('#wpDict','href')
+    check('사전 링크에 단어 포함', w.lower() in href.lower(), href)
+    pg.screenshot(path=str(OUT/'11_wordpop.png'))
+    pg.keyboard.press('Escape'); check('Esc로 팝업 닫기', not pg.locator('#wordpop').is_visible())
+    # 가리기
+    pg.click('#eyeBtn'); pg.click('#viewPop [data-hide=en]'); pg.keyboard.press('Escape')
+    pg.click('#play'); time.sleep(.3)
+    bl=lambda s: ev(pg,f"getComputedStyle(document.querySelector('{s}')).filter")
+    pg.mouse.move(5,5)
+    check('영어 가리기: 재생 중 블러', 'blur' in bl('#subEn'), bl('#subEn'))
+    check('한국어는 그대로', 'blur' not in bl('#subKo'))
+    pg.screenshot(path=str(OUT/'12_blur.png'))
+    pg.keyboard.press('e'); time.sleep(.3)
+    check('E 키로 보이기', 'blur' not in bl('#subEn'))
+    seek(pg,10); time.sleep(.4)
+    check('문장이 바뀌면 다시 가려짐', 'blur' in bl('#subEn'))
+    pg.click('#play'); time.sleep(.3)
+    check('일시정지하면 보임', 'blur' not in bl('#subEn'))
+    pg.click('#play'); time.sleep(.2); pg.click('#subEn'); time.sleep(.3)
+    check('탭하면 보임', 'blur' not in bl('#subEn'))
+    pg.click('#eyeBtn'); pg.click('#viewPop [data-hide=both]'); pg.keyboard.press('Escape'); time.sleep(.2)
+    pg.mouse.move(5,5); time.sleep(.3)
+    check('둘 다 가리기', ev(pg,"window.__bp.S.hide")=='both')
+    pg.click('#eyeBtn'); pg.click('#viewPop [data-hide=none]'); pg.keyboard.press('Escape')
+    # 재생 방식: 멈춤
+    pg.click('#styleBtn'); pg.click('#stylePop [data-style=pause]')
+    check('재생 방식 라벨', '멈춤' in pg.inner_text('#styleLbl'))
+    seek(pg,6.5); pg.click('#play') if ev(pg,'window.__bp.audio.paused') else None; time.sleep(2.4)
+    t=ev(pg,'window.__bp.audio.currentTime')
+    check('문장 끝(8.5)에서 멈춤', ev(pg,'window.__bp.audio.paused') and 8.3<t<8.6, f't={t:.2f}')
+    pg.keyboard.press('Space'); time.sleep(.6)
+    t2=ev(pg,'window.__bp.audio.currentTime')
+    check('Space → 다음 문장 이어서 재생(재멈춤 없음)', (not ev(pg,'window.__bp.audio.paused')) and t2>8.6, f't={t2:.2f}')
+    time.sleep(.5)
+    # 반복 x2
+    pg.click('#styleBtn'); pg.click('#stylePop [data-style=repeat]'); pg.click('#repOpts [data-n="2"]'); pg.keyboard.press('Escape')
+    seek(pg,7.5); time.sleep(.2); log=[]
+    for _ in range(75):
+        log.append(round(ev(pg,'window.__bp.audio.currentTime'),2)); time.sleep(.1)
+    jumps=sum(1 for a,b2 in zip(log,log[1:]) if b2<a-1)
+    check('반복 ×2: 한 번 되돌아감', jumps==1, f'jumps={jumps} {log[:3]}..{log[-3:]}')
+    check('반복 후 다음 문장으로 진행', ev(pg,'window.__bp.S.active')>=2, f"a={ev(pg,'window.__bp.S.active')}")
+    # 따라 말하기
+    pg.click('#styleBtn'); pg.click('#stylePop [data-style=shadow]'); pg.click('#shOpts [data-gap="0.5"]'); pg.keyboard.press('Escape')
+    seek(pg,6.9); 
+    if ev(pg,'window.__bp.audio.paused'): pg.click('#play')
+    time.sleep(1.9)
+    check('따라 말하기: 문장 끝에서 대기', ev(pg,'window.__bp.audio.paused') and pg.locator('#subWait').is_visible())
+    pg.screenshot(path=str(OUT/'13_shadow_wait.png'))
+    time.sleep(3.2)
+    check('대기 후 자동 이어서 재생', not ev(pg,'window.__bp.audio.paused') and ev(pg,'window.__bp.audio.currentTime')>8.6, f"t={ev(pg,'window.__bp.audio.currentTime'):.2f}")
+    pg.click('#styleBtn'); pg.click('#stylePop [data-style=continuous]')
+    # 키 M
+    pg.keyboard.press('m'); check('M 키로 재생 방식 순환', ev(pg,'window.__bp.S.style')=='pause')
+    pg.keyboard.press('m'); pg.keyboard.press('m'); pg.keyboard.press('m')
+    check('M 키 4번 → 연속', ev(pg,'window.__bp.S.style')=='continuous')
+    # 집중 보기
+    pg.click('#listBtn'); time.sleep(.3)
+    check('집중 보기: 목록 숨김', not pg.locator('#scroller').is_visible() and pg.locator('#subEn').is_visible())
+    fs=float(ev(pg,"getComputedStyle(document.querySelector('#subEn')).fontSize")[:-2])
+    check('집중 보기: 큰 글씨', fs>28, f'{fs}px')
+    pg.screenshot(path=str(OUT/'14_focus.png'))
+    pg.keyboard.press('f'); time.sleep(.3)
+    check('F로 목록 복귀', pg.locator('#scroller').is_visible())
+    # 영어/한 모드
+    pg.click('#modeSeg button[data-mode=en]')
+    check('EN 모드: 카드 한국어 숨김', not pg.locator('#subKo').is_visible())
+    pg.click('#modeSeg button[data-mode=both]')
+    check('콘솔 오류 없음(데스크톱)', not errs, str(errs[:3]))
+    # 모바일
+    pg2,errs2=setup(b,390,780)
+    seek(pg2,5); pg2.click('#play'); time.sleep(.4); pg2.click('#play')
+    r=ev(pg2,"""()=>{const q=s=>document.querySelector(s).getBoundingClientRect();const a=q('#sub .sub-in'),d=q('#dock .dock-in');return {sb:a.bottom,dt:d.top,db:d.bottom,vh:innerHeight,sw:document.documentElement.scrollWidth,iw:innerWidth,sl:a.left,sr:a.right}}""")
+    check('모바일 겹침 없음', r['sb']<=r['dt']+1 and r['db']<=r['vh']+1, str(r))
+    check('모바일 가로 넘침 없음', r['sw']<=r['iw'] and r['sl']>=0 and r['sr']<=r['iw'])
+    pg2.screenshot(path=str(OUT/'15_sub_mobile.png'))
+    pg2.click('#styleBtn'); time.sleep(.2)
+    pr=ev(pg2,"document.querySelector('#stylePop').getBoundingClientRect().toJSON()")
+    check('모바일 재생 방식 메뉴가 화면 안', pr['left']>=0 and pr['right']<=390 and pr['top']>=0, str(pr))
+    pg2.screenshot(path=str(OUT/'16_style_menu_mobile.png'))
+    pg2.keyboard.press('Escape'); pg2.click('#eyeBtn'); time.sleep(.2)
+    pr=ev(pg2,"document.querySelector('#viewPop').getBoundingClientRect().toJSON()")
+    check('모바일 자막 설정 메뉴가 화면 안', pr['left']>=0 and pr['right']<=390 and pr['top']>=0, str(pr))
+    pg2.screenshot(path=str(OUT/'17_view_menu_mobile.png'))
+    check('콘솔 오류 없음(모바일)', not errs2, str(errs2[:3]))
+    b.close()
+print(f'{sum(res)}/{len(res)} passed')

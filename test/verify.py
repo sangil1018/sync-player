@@ -65,11 +65,11 @@ with sync_playwright() as p:
 
     # 문장 반복
     pg.evaluate('window.__bp.audio.currentTime = 4.2'); time.sleep(.3)
-    pg.click('#loopBtn')
+    pg.keyboard.press('l')
     pg.evaluate('window.__bp.audio.currentTime = 8.0'); time.sleep(1.0)   # 문장2 끝(8.5) 지나면 4.0으로 돌아와야 함
     t = pg.evaluate('window.__bp.audio.currentTime'); a = pg.evaluate('window.__bp.S.active')
     check('문장 반복: 끝에서 문장 처음으로 복귀', a == 1 and t < 8.5, f't={t:.2f} active={a}')
-    pg.click('#loopBtn')
+    pg.keyboard.press('l')
 
     # 속도
     pg.click('#speedBtn'); pg.click('#speedPop button[data-r="0.8"]')
@@ -84,10 +84,10 @@ with sync_playwright() as p:
 
     # 글자 크기
     f0 = pg.evaluate("getComputedStyle(document.querySelector('.cue .en')).fontSize")
-    pg.click('#fsUp'); pg.click('#fsUp')
+    pg.click('#eyeBtn'); pg.click('#fsUp'); pg.click('#fsUp')
     f1 = pg.evaluate("getComputedStyle(document.querySelector('.cue .en')).fontSize")
     check('글자 크게', float(f1[:-2]) > float(f0[:-2]), f'{f0}→{f1}')
-    pg.click('#fsDown'); pg.click('#fsDown')
+    pg.click('#fsDown'); pg.click('#fsDown'); pg.keyboard.press('Escape')
 
     # 키보드
     pg.evaluate('window.__bp.audio.pause()'); pg.keyboard.press('Space'); time.sleep(.2)

@@ -1,7 +1,7 @@
 {
   "name": "sync-player",
   "productName": "Sync Player",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "영어·한국어 동시 자막 오디오 플레이어",
   "main": "electron/main.js",
   "author": "Zinger",
