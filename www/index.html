@@ -34,8 +34,19 @@ header{display:flex;align-items:center;gap:12px;padding:calc(14px + var(--safe-t
 .iconbtn svg{width:18px;height:18px}
 
 /* transcript */
-main{flex:1;position:relative;min-height:0;--dock-h:132px;--sub-h:0px}
-#scroller{position:absolute;left:0;right:0;top:0;bottom:calc(var(--dock-h) + var(--sub-h));overflow-y:auto;overscroll-behavior:contain;scroll-behavior:auto;
+main{flex:1;position:relative;min-height:0;--dock-h:132px;--sub-h:0px;--vt:0px}
+main.has-video{--vt:min(38vh,56.25vw)}
+#stage{display:none;position:absolute;left:0;right:0;top:0;height:var(--vt);background:#000;z-index:3;border-bottom:1px solid var(--line)}
+main.has-video #stage{display:block}
+main.has-video #scroller{padding-top:36px;padding-bottom:36px}
+#media{width:100%;height:100%;object-fit:contain;display:block;background:#000;cursor:pointer}
+#media.mirror{transform:scaleX(-1)}
+.vbtns{position:absolute;right:10px;top:10px;display:flex;gap:6px;opacity:0;transition:opacity .2s}
+#stage:hover .vbtns,#stage:focus-within .vbtns,.vbtns.show{opacity:1}
+.vbtns button{height:30px;padding:0 10px;border-radius:9px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;backdrop-filter:blur(6px)}
+.vbtns button[aria-pressed=true]{background:var(--accent);color:#1a1206}
+@media (hover:none){.vbtns{opacity:1}}
+#scroller{position:absolute;left:0;right:0;top:var(--vt);bottom:calc(var(--dock-h) + var(--sub-h));overflow-y:auto;overscroll-behavior:contain;scroll-behavior:auto;
   padding:22vh 20px 22vh;
   mask-image:linear-gradient(to bottom,transparent 0,#000 14%,#000 84%,transparent 100%);
   -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 14%,#000 84%,transparent 100%)}
@@ -79,7 +90,7 @@ main.mode-ko .cue .ko{margin-top:0;font-size:calc(17.5px*var(--fs));color:var(--
 #sub:is([data-hide=ko],[data-hide=both]):not(.rev):not(.rp) .sl-ko:not(:hover){filter:blur(9px);cursor:pointer;user-select:none}
 /* 집중 보기: 목록을 숨기고 자막만 크게 */
 main.focus #scroller{display:none}
-main.focus #sub{top:0;bottom:var(--dock-h);display:flex;flex-direction:column;justify-content:center;padding:0 24px 8px}
+main.focus #sub{top:var(--vt);bottom:var(--dock-h);display:flex;flex-direction:column;justify-content:center;padding:0 24px 8px}
 main.focus .sub-in{background:transparent;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;text-align:center;padding:8px 4px}
 main.focus .sub-top{justify-content:center}
 main.focus .sub-top .sp{display:none}
@@ -226,6 +237,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.2)}
         <div class="hint" id="emptyHint">파일을 이 창에 끌어다 놓아도 됩니다</div>
       </div>
     </div>
+    <div id="stage"><video id="media" playsinline preload="auto"></video><div class="vbtns"><button id="mirrorBtn" aria-pressed="false" title="좌우 반전 (V)">↔ 반전</button><button id="fsBtn" title="전체화면 (더블클릭)">전체화면</button></div></div>
     <div id="scroller" aria-live="off"><div class="list" id="list"></div></div>
 
     <section id="sub" hidden aria-label="현재 자막">
@@ -304,7 +316,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.2)}
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
-const audio = new Audio(); audio.preload = 'auto';
+const audio = $('#media');
 const S = { cues: [], active: -1, mode: 'both', fs: 1, rate: 1, audioName: '', subNames: [], userScrollUntil: 0,
   style: 'continuous', repeatN: 3, shadowGap: 1, hide: 'none', revealPause: true, showList: true,
   trk: -2, armed: false, repLeft: 0, wait: 0 };
@@ -396,7 +408,7 @@ function render(){
   S.active = -1; S.trk = -2; applyMode(); renderSub(0); updateDock();
 }
 function applyMode(){
-  $('main').className = 'mode-' + S.mode + (S.showList ? '' : ' focus');
+  $('main').className = 'mode-' + S.mode + (S.showList ? '' : ' focus') + (S.video ? ' has-video' : '');
   document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
   document.documentElement.style.setProperty('--fs', S.fs);
   $('#listBtn').setAttribute('aria-pressed', S.showList);
@@ -524,6 +536,17 @@ document.querySelectorAll('#viewPop [data-hide]').forEach(b => b.onclick = () =>
 $('#revPause').onchange = e => { S.revealPause = e.target.checked; store.set('revealPause', S.revealPause); updateRP(); };
 $('#listBtn').onclick = () => { S.showList = !S.showList; store.set('showList', S.showList); applyMode(); if(S.showList && S.active >= 0) setTimeout(() => centerOn($('#list').children[S.active], false), 30); };
 
+/* ---------- 영상 ---------- */
+S.mirror = store.get('mirror', false);
+function setVideo(v){ S.video = v; $('main').classList.toggle('has-video', v); audio.classList.toggle('mirror', v && S.mirror); $('#mirrorBtn').setAttribute('aria-pressed', S.mirror); measure(); if(S.active >= 0 && S.showList) setTimeout(() => { const el = $('#list').children[S.active]; if(el) centerOn(el, false); }, 30); }
+function toggleMirror(){ S.mirror = !S.mirror; store.set('mirror', S.mirror); setVideo(S.video); }
+function toggleFs(){ const el = document.documentElement; if(document.fullscreenElement) document.exitFullscreen(); else (el.requestFullscreen || el.webkitRequestFullscreen || (()=>{})).call(el); }
+audio.addEventListener('click', () => audio.paused ? audio.play().catch(()=>{}) : audio.pause());
+audio.addEventListener('dblclick', toggleFs);
+$('#mirrorBtn').onclick = toggleMirror; $('#fsBtn').onclick = toggleFs;
+document.addEventListener('fullscreenchange', measure);
+function frameStep(d){ audio.pause(); seekTo(audio.currentTime + d / 30); }
+
 /* ---------- 재생 동기화 ---------- */
 function findActive(t){
   const c = S.cues; if(!c.length || t < c[0].start - 0.2) return -1;
@@ -539,6 +562,7 @@ function setActive(i, smooth=true){
   if(i >= 0 && els[i]){ els[i].classList.add('active'); if(performance.now() > S.userScrollUntil) centerOn(els[i], smooth); }
 }
 function centerOn(el, smooth){
+  if(!el) return;
   const sc = $('#scroller'); const target = el.offsetTop - (sc.clientHeight - el.offsetHeight) / 2 + 20;
   if(smooth && !matchMedia('(prefers-reduced-motion:reduce)').matches) sc.scrollTo({ top: target, behavior: 'smooth' }); else sc.scrollTop = target;
 }
@@ -584,9 +608,9 @@ function stepCue(dir){
 audio.addEventListener('play', () => { cancelWait(); closeWord(); updateRP(); $('#icoPlay').style.display='none'; $('#icoPause').style.display=''; $('#play').setAttribute('aria-label','일시정지'); cancelAnimationFrame(raf); raf = requestAnimationFrame(tick); });
 audio.addEventListener('pause', () => { updateRP(); $('#icoPlay').style.display=''; $('#icoPause').style.display='none'; $('#play').setAttribute('aria-label','재생'); cancelAnimationFrame(raf); tick(); savePos(); });
 audio.addEventListener('timeupdate', () => { if(audio.paused) tick(); });
-audio.addEventListener('loadedmetadata', () => { $('#dur').textContent = fmt(audio.duration); audio.playbackRate = S.rate; restorePos(); tick(); });
+audio.addEventListener('loadedmetadata', () => { setVideo(audio.videoWidth > 0); $('#dur').textContent = fmt(audio.duration); audio.playbackRate = S.rate; restorePos(); tick(); });
 audio.addEventListener('ended', () => { savePos(0); });
-audio.addEventListener('error', () => toast('이 오디오 형식은 재생할 수 없습니다 (mp3/m4a/wav 권장)'));
+audio.addEventListener('error', () => { if(audio.src) toast(S.audioName && /\.(mp4|mov|mkv|webm|m4v)$/i.test(S.audioName) ? '이 영상 형식은 재생할 수 없습니다 (H.264/AAC mp4 권장)' : '이 오디오 형식은 재생할 수 없습니다 (mp3/m4a/wav 권장)'); });
 setInterval(() => { if(!audio.paused) savePos(); }, 5000);
 setInterval(() => { if(!audio.paused) step(); }, 100);   // 화면이 가려져 rAF가 멈춰도 문장 끝 처리
 
@@ -597,10 +621,11 @@ function restorePos(){ const p = store.get(posKey(), 0); if(p > 2 && p < audio.d
 /* ---------- 파일 열기 ---------- */
 let objUrl = '';
 function loadAudio(file){
-  if(objUrl) URL.revokeObjectURL(objUrl);
+  setVideo(false); if(objUrl) URL.revokeObjectURL(objUrl);
   objUrl = URL.createObjectURL(file); audio.src = objUrl; S.audioName = file.name; audio.load(); updateDock();
 }
-function loadAudioUrl(url, name){                 // Electron: 같은 폴더의 오디오를 파일 경로로 바로 연결(대용량 복사 없음)
+function loadAudioUrl(url, name){
+  setVideo(false);                 // Electron: 같은 폴더의 오디오를 파일 경로로 바로 연결(대용량 복사 없음)
   if(objUrl){ URL.revokeObjectURL(objUrl); objUrl = ''; }
   audio.src = url; S.audioName = name; audio.load(); updateDock();
 }
@@ -763,6 +788,9 @@ addEventListener('keydown', e => {
     case 'm': case 'M': setStyle(['continuous','pause','shadow','repeat'][(['continuous','pause','shadow','repeat'].indexOf(S.style) + 1) % 4]); break;
     case 'e': case 'E': toggleRev(); break;
     case 'h': case 'H': togglePop('viewPop'); break;
+    case 'v': case 'V': if(S.video) toggleMirror(); break;
+    case ',': if(S.video) frameStep(-1); break;
+    case '.': if(S.video) frameStep(1); break;
     case 'f': case 'F': $('#listBtn').click(); break;
     case 'Escape': closePops(); closeWord(); break;
     case 'r': case 'R': if(S.active>=0){ seekTo(S.cues[S.active].start + .01); } break;
@@ -783,7 +811,7 @@ if('mediaSession' in navigator){
 }
 
 /* 테스트/자동화용 */
-window.__bp = { S, audio, handleFiles, findActive, stemOf, companionsFor, renderSub, setStyle, cueAt };
+window.__bp = { S, audio, handleFiles, findActive, stemOf, companionsFor, renderSub, setStyle, cueAt, setVideo };
 updateStyleUI(); applyMode(); renderSub(0); updateDock();
 })();
 </script>
