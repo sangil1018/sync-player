@@ -13,9 +13,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
-      - run: npx electron-builder --win nsis portable --x64 --publish never
+      - run: npx electron-builder --win nsis portable zip --x64 --publish never
       - uses: actions/upload-artifact@v4
-        with: { name: windows, path: dist/*.exe }
+        with:
+          name: windows
+          path: |
+            dist/*.exe
+            dist/*.zip
 
   macos:
     runs-on: macos-latest
