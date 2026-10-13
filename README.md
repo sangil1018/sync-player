@@ -58,7 +58,8 @@ mp4 · mov · webm · mkv 도 오디오와 똑같이 열립니다(같은 이름�
 ⚠ 표시는 현장 음질 때문에 받아쓰기가 불확실한 문장입니다. 마지막 재생 위치는 파일별로 기억합니다.
 
 ## 설치
-- **Windows**: `SyncPlayer-*-win-x64-portable.zip` 압축 해제 → `Sync Player.exe` 실행
+- **Windows (권장)**: `SyncPlayer-Setup-*-x64.exe` 설치 → 시작 메뉴/바탕화면의 Sync Player 실행. 설치형이라 시작이 가장 빠릅니다.
+- **Windows 포터블**: `SyncPlayer-Portable-*-x64.exe` (설치 없이 실행, 실행할 때마다 압축을 풀어서 시작이 느립니다)
   (SmartScreen 경고: 추가 정보 → 실행)
 - **Android**: `.apk` 설치 (설정에서 "출처를 알 수 없는 앱 설치" 허용)
 - **Mac**: 아래 빌드 후 `.dmg` 설치. 처음 한 번은 앱을 우클릭 → 열기.

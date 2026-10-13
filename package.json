@@ -47,7 +47,11 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "perMachine": false
+      "perMachine": false,
+      "artifactName": "SyncPlayer-Setup-${version}-${arch}.${ext}",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sync Player"
     },
     "mac": {
       "target": [
@@ -76,7 +80,10 @@
       "icon": "build/icon.png"
     },
     "artifactName": "SyncPlayer-${version}-${os}-${arch}.${ext}",
-    "afterPack": "build/afterPack.js"
+    "afterPack": "build/afterPack.js",
+    "portable": {
+      "artifactName": "SyncPlayer-Portable-${version}-${arch}.${ext}"
+    }
   },
   "devDependencies": {
     "electron": "^33.0.0",
