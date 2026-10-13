@@ -2,6 +2,21 @@
 
 강습 녹음을 재생하면서 영어·한국어 자막을 함께 보는 플레이어. Windows · Mac · Android.
 
+## 화면
+| 하단 이중 자막 | 자막 가리기 (듣기 연습) |
+|---|---|
+| ![하단 이중 자막](docs/screenshots/01-dual-subtitles.png) | ![자막 가리기](docs/screenshots/02-hide-subtitles.png) |
+
+| 영상 (위 영상 · 아래 자막) | 집중 보기 |
+|---|---|
+| ![영상](docs/screenshots/03-video.png) | ![집중 보기](docs/screenshots/04-focus.png) |
+
+| 모바일 | 재생 방식 | 모바일 영상 |
+|---|---|---|
+| <img src="docs/screenshots/05-mobile.png" width="240"> | <img src="docs/screenshots/06-play-styles-mobile.png" width="240"> | <img src="docs/screenshots/07-video-mobile.png" width="240"> |
+
+*(화면은 테스트용 합성 음성·영상으로 찍은 예시입니다.)*
+
 ## 사용법
 **파일 열기** 한 번이면 됩니다. 음성 또는 자막 중 하나만 골라도 **같은 이름의 짝 파일을 자동으로 불러옵니다.**
 
